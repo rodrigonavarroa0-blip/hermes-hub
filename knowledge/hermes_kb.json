@@ -1,0 +1,143 @@
+{
+  "hermes_hub_knowledge_base": {
+    "version": "2.0.0",
+    "updated_at": "2026-08-18T21:45:00Z",
+    "patterns": [
+      {
+        "id": "PAT-001",
+        "name": "Event Sourcing for Synaptic Weights",
+        "problem": "Multiple agents concurrently modifying the graph topology leads to race conditions and graph corruption.",
+        "recommended_architecture": "Instead of executing direct UPDATE queries on the graph, agents publish immutable 'WeightAdjustmentEvents'. A single deterministic Worker processes the event queue sequentially to apply state mutations.",
+        "implementation_example": "Agent emits: { 'type': 'SynapseFired', 'source': 'A', 'target': 'B', 'weight_delta': +0.05 }. Kafka Consumer applies: UPDATE edges SET weight = weight + 0.05 WHERE source_id='A' AND target_id='B'."
+      },
+      {
+        "id": "PAT-002",
+        "name": "Semantic Caching",
+        "problem": "High token costs and latency for repetitive identical or highly similar user queries.",
+        "recommended_architecture": "Implement Redis + pgvector caching. Before hitting the LLM, embed the query and perform a cosine similarity search against previous queries. If similarity > 0.95, return the cached LLM response directly.",
+        "implementation_example": "def check_cache(prompt): vec = embed(prompt); res = pg.query('SELECT response FROM cache WHERE 1 - (embedding <=> vec) > 0.95 LIMIT 1'); return res"
+      },
+      {
+        "id": "PAT-003",
+        "name": "Federated Micro-Frontends for Dashboard",
+        "problem": "The React Dashboard monolithic application becomes too heavy as we add 50 different visualization tools for the Hub.",
+        "recommended_architecture": "Use Module Federation (Webpack/Turbopack). The main shell handles authentication and routing. The 3D Graph, the Data Tables, and the Agent Chat are independently deployed Micro-frontends.",
+        "implementation_example": "ModuleFederationPlugin({ name: 'hermes_shell', remotes: { graph: 'graph@http://localhost:3001/remoteEntry.js' }})"
+      }
+    ],
+    "anti_patterns": [
+      {
+        "id": "ANTI-001",
+        "name": "The God Agent",
+        "symptom": "A single LLM prompt contains all instructions, 50 tools, and generic routing rules, resulting in 10k+ token usage per step.",
+        "risk": "High hallucination rate, inability to follow complex instructions, and astronomical API costs.",
+        "refactoring_strategy": "Implement a 'Router-Worker' architecture. The user speaks to the Router (who has only 3 tools: route_to_coder, route_to_search, route_to_db). The worker executes the task with a highly focused 500-token prompt and returns the result."
+      },
+      {
+        "id": "ANTI-002",
+        "name": "Infinite Tool Loops",
+        "symptom": "An agent calls a tool, gets an exception (e.g. 'File not found'), and blindly repeats the identical tool call 50 times until the framework crashes.",
+        "risk": "Infinite execution loops drain API budgets in minutes.",
+        "refactoring_strategy": "Framework-level interceptors. Track the hash of `(tool_name + arguments)`. If the exact hash is submitted 3 times consecutively and results in an error, force a framework exception or inject a 'STOP IMMEDIATELY: YOU ARE IN A LOOP' system prompt."
+      },
+      {
+        "id": "ANTI-003",
+        "name": "Blind RAG (Context Overflow)",
+        "symptom": "Injecting the top 20 Vector DB results into the prompt without pruning.",
+        "risk": "The 'Lost in the Middle' phenomenon where the LLM forgets the middle context. Degrades accuracy to below 50%.",
+        "refactoring_strategy": "Use Spreading Activation. Find the top 3 nodes. Then traverse their edges to find 2 strictly related nodes. Re-rank using a Cross-Encoder. Send maximum 5 nodes to the LLM."
+      }
+    ],
+    "skills_registry": [
+      {
+        "identifier": "mcp_hermes_resolve_context",
+        "description": "Performs Spreading Activation to find related context for a prompt.",
+        "inputs": {
+          "prompt": "string (Required)",
+          "threshold": "number (Default: 0.70)",
+          "max_hops": "number (Default: 2)"
+        },
+        "outputs": {
+          "active_nodes": "Array of Object { id, label, summary, energy }",
+          "execution_time_ms": "number"
+        },
+        "dependencies": ["pgvector", "OpenAI Embeddings API / fastembed"],
+        "orchestration_logic": "Vectorize prompt -> Find KNN in PostgreSQL -> For each nearest neighbor, traverse edges up to max_hops -> Decay energy by 0.5 per hop -> Sort nodes by accumulated energy -> Return top 10."
+      },
+      {
+        "identifier": "mcp_hermes_propose_skill",
+        "description": "Writes a new knowledge block into the drafts folder.",
+        "inputs": {
+          "id": "string (Required, kebab-case)",
+          "title": "string",
+          "type": "string (skill|rule)",
+          "procedure_markdown": "string"
+        },
+        "outputs": {
+          "status": "string ('quarantined')",
+          "file_path": "string"
+        },
+        "dependencies": ["Local Filesystem"],
+        "orchestration_logic": "Validate inputs via Zod -> Sanitize procedure_markdown -> Write file to ~/.hermes-hub/drafts/draft-{id}.md -> Update SQLite local index."
+      }
+    ],
+    "public_apis": [
+      {
+        "name": "Context Resolution API",
+        "category": "Cognitive",
+        "base_endpoint": "POST /api/v1/context/resolve",
+        "auth_type": "mTLS or JWT (Bearer)",
+        "use_case": "Called by external agents (e.g. VS Code Copilot) to fetch organizational context before generating code.",
+        "rate_limit": "100 req/min"
+      },
+      {
+        "name": "Episodic Memory Ingestion",
+        "category": "Memory",
+        "base_endpoint": "POST /api/v1/memory/episodic",
+        "auth_type": "mTLS",
+        "use_case": "Used by autonomous agents to log their final trajectories and findings into the short-term memory bank.",
+        "rate_limit": "500 req/min"
+      },
+      {
+        "name": "Topology Export",
+        "category": "Visualization",
+        "base_endpoint": "GET /api/v1/graph/topology",
+        "auth_type": "JWT (Bearer)",
+        "use_case": "Used by the Next.js 3D Force Graph UI to fetch the entire node/edge array for rendering the 'Second Brain' galaxy.",
+        "rate_limit": "20 req/min"
+      }
+    ],
+    "data_schemas": {
+      "HermesNode": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "label": { "type": "string", "minLength": 3 },
+          "type": { "enum": ["skill", "rule", "architecture", "memory", "agent"] },
+          "summary": { "type": "string" },
+          "content_source_file": { "type": "string" },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "usage_count": { "type": "integer" },
+              "energy_baseline": { "type": "number" }
+            }
+          }
+        },
+        "required": ["id", "label", "type", "summary"]
+      },
+      "SynapticEdge": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "source_node_id": { "type": "string", "format": "uuid" },
+          "target_node_id": { "type": "string", "format": "uuid" },
+          "weight": { "type": "number", "minimum": 0, "maximum": 1 },
+          "relationship_type": { "type": "string" }
+        },
+        "required": ["source_node_id", "target_node_id", "weight"]
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+#!/usr/bin/expect -f
+set timeout -1
+set file [lindex $argv 0]
+set dest [lindex $argv 1]
+set ip "100.108.12.94"
+set password "1234"
+set user "rodri"
+
+spawn scp -o StrictHostKeyChecking=no "$file" "$user@$ip:$dest"
+
+expect {
+    "assword:" {
+        send "$password\r"
+        exp_continue
+    }
+    eof {
+        exit 0
+    }
+}

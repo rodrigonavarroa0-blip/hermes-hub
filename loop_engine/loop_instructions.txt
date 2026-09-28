@@ -1,0 +1,23 @@
+# Antigravity Loop Prompts & Execution Commands
+
+### Command Line Interface (CLI) /goal Template
+Copy and paste this structured prompt directly into your Antigravity terminal command line:
+
+```bash
+/goal "Read PRD.md and progress.txt to identify the next incomplete task. Execute that single task, run local validations, update progress.txt with the results, and loop until all PRD.md tasks are marked complete."
+```
+
+### Ralph Loop Extension JSON Configuration
+If using the Ralph Loop IDE extension, save this snippet in your configuration or workspace file (`.antigravity/loop.json`):
+
+```json
+{
+  "loop": {
+    "maxIterations": 10,
+    "stopOnFailure": true,
+    "memoryFile": "progress.txt",
+    "specificationFile": "PRD.md",
+    "verificationCommand": "npm test || pytest || python validate.py"
+  }
+}
+```

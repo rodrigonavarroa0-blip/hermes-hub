@@ -1,0 +1,23 @@
+#!/usr/bin/expect -f
+set timeout 10
+set user [lindex $argv 0]
+set ip "100.108.12.94"
+set password "1234"
+
+spawn ssh -o StrictHostKeyChecking=no "$user@$ip" "echo 'SUCCESS: Connected as $user' && exit"
+
+expect {
+    "assword:" {
+        send "$password\r"
+        exp_continue
+    }
+    "SUCCESS:" {
+        exit 0
+    }
+    timeout {
+        exit 1
+    }
+    eof {
+        exit 1
+    }
+}

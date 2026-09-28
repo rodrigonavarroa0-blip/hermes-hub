@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "hermes-context-engine": {
+      "command": "/Users/rodrigonavarroalvarez/.hermes-hub/.venv/bin/python",
+      "args": [
+        "/Users/rodrigonavarroalvarez/.hermes-hub/config/mcp_server.py"
+      ],
+      "env": {
+        "HERMES_HUB_PATH": "/Users/rodrigonavarroalvarez/.hermes-hub"
+      }
+    }
+  }
+}

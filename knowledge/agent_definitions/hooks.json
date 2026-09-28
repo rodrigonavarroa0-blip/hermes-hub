@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "hooks": {
+    "post_init": [
+      {
+        "description": "Verify Hermes Hub environment",
+        "command": "/Users/rodrigonavarroalvarez/.hermes-hub/bin/hermes stats"
+      }
+    ]
+  }
+}
